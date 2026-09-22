@@ -60,6 +60,7 @@ if (devices.Count == 0)
 foreach (var device in devices)
 {
     var recognized = QcyDeviceRegistry.Find(device.VendorId);
+    var recognized = QcyDeviceRegistry.FindByVendorId(device.VendorId);
     var label = recognized is not null ? $"[{recognized.DisplayName}] " : "";
     Console.WriteLine(
         $"Found: {label}{device.Name} · vendor {device.VendorId} (0x{device.VendorId:X4}) · RSSI {device.SignalStrength} dBm · " +
