@@ -3,6 +3,7 @@ namespace OpenQCY_Desktop.Protocol;
 public static class QcyUuids
 {
     public static readonly Guid MainService = Guid.Parse("0000a001-0000-1000-8000-00805f9b34fb");
+    public static readonly Guid SecondaryService = Guid.Parse("0000a002-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Command = Guid.Parse("00001001-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Notification = Guid.Parse("00001002-0000-1000-8000-00805f9b34fb");
     public static readonly Guid FirmwareVersion = Guid.Parse("00000007-0000-1000-8000-00805f9b34fb");

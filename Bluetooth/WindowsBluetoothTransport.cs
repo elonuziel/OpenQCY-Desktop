@@ -42,8 +42,12 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         CancellationToken cancellationToken = default)
     {
         var devices = new List<BluetoothDeviceInfo>();
-        var serviceSelector = GattDeviceService.GetDeviceSelectorFromUuid(QcyUuids.MainService);
-        var knownServices = await DeviceInformation.FindAllAsync(serviceSelector);
+        var knownServices = new List<DeviceInformation>();
+        foreach (var serviceUuid in new[] { QcyUuids.MainService, QcyUuids.SecondaryService })
+        {
+            var serviceSelector = GattDeviceService.GetDeviceSelectorFromUuid(serviceUuid);
+            knownServices.AddRange(await DeviceInformation.FindAllAsync(serviceSelector));
+        }
         foreach (var knownService in knownServices)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -338,25 +342,28 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         List<string> diagnostics,
         ulong address)
     {
-        try
+        foreach (var serviceUuid in new[] { QcyUuids.MainService, QcyUuids.SecondaryService })
         {
-            var directResult = await bluetoothDevice.GetGattServicesForUuidAsync(
-                QcyUuids.MainService,
-                BluetoothCacheMode.Uncached);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (directResult.Status == GattCommunicationStatus.Success && directResult.Services.Count > 0)
+            try
             {
-                for (var i = 1; i < directResult.Services.Count; i++)
-                {
-                    directResult.Services[i].Dispose();
-                }
+                var directResult = await bluetoothDevice.GetGattServicesForUuidAsync(
+                    serviceUuid,
+                    BluetoothCacheMode.Uncached);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                return directResult.Services[0];
+                if (directResult.Status == GattCommunicationStatus.Success && directResult.Services.Count > 0)
+                {
+                    for (var i = 1; i < directResult.Services.Count; i++)
+                    {
+                        directResult.Services[i].Dispose();
+                    }
+
+                    return directResult.Services[0];
+                }
             }
-        }
-        catch
-        {
+            catch
+            {
+            }
         }
 
         GattDeviceServicesResult? allServicesResult = null;
@@ -383,7 +390,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
 
         if (allServicesResult is null || allServicesResult.Status != GattCommunicationStatus.Success || allServicesResult.Services.Count == 0)
         {
-            diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: A001 service not found ({allServicesResult?.Status.ToString() ?? "Failed"})");
+            diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: A001/A002 service not found ({allServicesResult?.Status.ToString() ?? "Failed"})");
             return null;
         }
 
@@ -395,7 +402,9 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         {
             var uuid = services[i].Uuid;
             if (uuid == QcyUuids.MainService ||
-                uuid.ToString().StartsWith("0000a001", StringComparison.OrdinalIgnoreCase))
+                uuid == QcyUuids.SecondaryService ||
+                uuid.ToString().StartsWith("0000a001", StringComparison.OrdinalIgnoreCase) ||
+                uuid.ToString().StartsWith("0000a002", StringComparison.OrdinalIgnoreCase))
             {
                 matchedIndex = i;
                 break;
@@ -441,7 +450,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             s.Dispose();
         }
 
-        diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: Services found: [{string.Join(", ", foundUuids)}], but none matched A001");
+        diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: Services found: [{string.Join(", ", foundUuids)}], but none matched A001/A002");
         return null;
     }
 
