@@ -5,11 +5,32 @@ on:
     branches: [main, "codex/**", "agent/**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  probe-build:
+    name: "Diagnostic Probe (Fast x64)"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish standalone diagnostic probe
+        run: dotnet publish Diagnostics/OpenQCY.Probe/OpenQCY.Probe.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/probe
+
+      - name: Upload standalone probe
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenQCY-Probe-Standalone
+          path: artifacts/probe/OpenQCY.Probe.exe
+
   windows-build:
     name: ${{ matrix.name }}
     runs-on: windows-latest
