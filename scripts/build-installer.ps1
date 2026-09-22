@@ -9,14 +9,26 @@ param(
     [ValidateSet('win-x64')]
     [string]$RuntimeIdentifier = 'win-x64',
 
+    [string]$TargetPlatformMinVersion = '10.0.22000.0',
+
+    [string]$OutputBaseFilename = 'OpenQCY-Desktop-Setup',
+
+    [string]$PublishDirectory,
+
+    [string]$InstallerDirectory,
+
     [switch]$SkipPublish
 )
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $artifactsRoot = Join-Path $repositoryRoot 'artifacts'
-$publishDirectory = Join-Path $artifactsRoot 'publish'
-$installerDirectory = Join-Path $artifactsRoot 'installer'
+if (-not $PublishDirectory) {
+    $PublishDirectory = Join-Path $artifactsRoot 'publish'
+}
+if (-not $InstallerDirectory) {
+    $InstallerDirectory = Join-Path $artifactsRoot 'installer'
+}
 $installerScript = Join-Path $repositoryRoot 'installer\OpenQCY.iss'
 
 function Reset-GeneratedDirectory {
@@ -51,18 +63,24 @@ function Find-InnoCompiler {
     return $candidates | Select-Object -First 1
 }
 
-Reset-GeneratedDirectory -Path $installerDirectory
+if (-not (Test-Path -LiteralPath $InstallerDirectory)) {
+    New-Item -ItemType Directory -Path $InstallerDirectory -Force | Out-Null
+}
+$targetInstallerFile = Join-Path $InstallerDirectory "$OutputBaseFilename.exe"
+if (Test-Path -LiteralPath $targetInstallerFile) {
+    Remove-Item -LiteralPath $targetInstallerFile -Force
+}
 
 Push-Location $repositoryRoot
 try {
     if ($SkipPublish) {
-        $publishedExecutable = Join-Path $publishDirectory 'OpenQCY.Desktop.exe'
+        $publishedExecutable = Join-Path $PublishDirectory 'OpenQCY.Desktop.exe'
         if (-not (Test-Path -LiteralPath $publishedExecutable)) {
             throw "Published application was not found: $publishedExecutable"
         }
     }
     else {
-        Reset-GeneratedDirectory -Path $publishDirectory
+        Reset-GeneratedDirectory -Path $PublishDirectory
 
         dotnet restore OpenQCY.Desktop.csproj -r $RuntimeIdentifier -p:PublishReadyToRun=true
         if ($LASTEXITCODE -ne 0) {
@@ -78,8 +96,9 @@ try {
             '--self-contained', 'true',
             '-p:WindowsAppSDKSelfContained=true',
             "-p:Version=$Version",
+            "-p:TargetPlatformMinVersion=$TargetPlatformMinVersion",
             '--no-restore',
-            '-o', $publishDirectory
+            '-o', $PublishDirectory
         )
         & dotnet @publishArguments
         if ($LASTEXITCODE -ne 0) {
@@ -87,11 +106,18 @@ try {
         }
     }
 
+    $minVersion = $TargetPlatformMinVersion
+    if ($minVersion -match '^(\d+\.\d+\.\d+)\.\d+$') {
+        $minVersion = $Matches[1]
+    }
+
     $iscc = Find-InnoCompiler
     $innoArguments = @(
         "/DAppVersion=$Version",
-        "/DSourceDir=$publishDirectory",
-        "/DOutputDir=$installerDirectory",
+        "/DSourceDir=$PublishDirectory",
+        "/DOutputDir=$InstallerDirectory",
+        "/DOutputBaseFilename=$OutputBaseFilename",
+        "/DMinVersion=$minVersion",
         $installerScript
     )
     & $iscc @innoArguments
@@ -103,7 +129,7 @@ finally {
     Pop-Location
 }
 
-$installer = Join-Path $installerDirectory 'OpenQCY-Desktop-Setup.exe'
+$installer = Join-Path $InstallerDirectory "$OutputBaseFilename.exe"
 if (-not (Test-Path -LiteralPath $installer)) {
     throw "Installer was not generated: $installer"
 }

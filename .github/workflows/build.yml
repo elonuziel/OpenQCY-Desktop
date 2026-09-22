@@ -10,8 +10,24 @@ permissions:
   contents: read
 
 jobs:
-  windows-x64:
+  windows-build:
+    name: ${{ matrix.name }}
     runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - id: win11
+            name: "Windows 11 (x64)"
+            min-version: "10.0.22000.0"
+            portable-artifact: "OpenQCY-Desktop-win-x64"
+            installer-artifact: "OpenQCY-Desktop-Setup"
+            installer-filename: "OpenQCY-Desktop-Setup"
+          - id: win10
+            name: "Windows 10 (x64)"
+            min-version: "10.0.17763.0"
+            portable-artifact: "OpenQCY-Desktop-win10-x64"
+            installer-artifact: "OpenQCY-Desktop-Win10-Setup"
+            installer-filename: "OpenQCY-Desktop-Win10-Setup"
     steps:
       - uses: actions/checkout@v7
 
@@ -30,13 +46,13 @@ jobs:
         run: dotnet restore OpenQCY.Desktop.csproj -r win-x64 -p:PublishReadyToRun=true
 
       - name: Build desktop app
-        run: dotnet build OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 --no-restore
+        run: dotnet build OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:TargetPlatformMinVersion=${{ matrix.min-version }} --no-restore
 
       - name: Build diagnostic probe
         run: dotnet build Diagnostics/OpenQCY.Probe/OpenQCY.Probe.csproj -c Release
 
       - name: Publish portable build
-        run: dotnet publish OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true --no-restore -o artifacts/publish
+        run: dotnet publish OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -p:TargetPlatformMinVersion=${{ matrix.min-version }} --no-restore -o artifacts/publish
 
       - name: Install pinned Inno Setup
         shell: pwsh
@@ -44,16 +60,16 @@ jobs:
 
       - name: Build Windows installer
         shell: pwsh
-        run: ./scripts/build-installer.ps1 -Version 0.1.0 -SkipPublish
+        run: ./scripts/build-installer.ps1 -Version 0.2.0 -SkipPublish -TargetPlatformMinVersion "${{ matrix.min-version }}" -OutputBaseFilename "${{ matrix.installer-filename }}"
 
       - name: Upload portable build
         uses: actions/upload-artifact@v7
         with:
-          name: OpenQCY-Desktop-win-x64
+          name: ${{ matrix.portable-artifact }}
           path: artifacts/publish
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v7
         with:
-          name: OpenQCY-Desktop-Setup
-          path: artifacts/installer/OpenQCY-Desktop-Setup.exe
+          name: ${{ matrix.installer-artifact }}
+          path: artifacts/installer/${{ matrix.installer-filename }}.exe

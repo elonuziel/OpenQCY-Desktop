@@ -15,6 +15,14 @@
   #define OutputDir "..\artifacts\installer"
 #endif
 
+#ifndef OutputBaseFilename
+  #define OutputBaseFilename "OpenQCY-Desktop-Setup"
+#endif
+
+#ifndef MinVersion
+  #define MinVersion "10.0.22000"
+#endif
+
 [Setup]
 AppId={{F4B238F0-9112-4B1A-99C5-B4F05B72DD6B}
 AppName={#AppName}
@@ -30,9 +38,9 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.22000
+MinVersion={#MinVersion}
 OutputDir={#OutputDir}
-OutputBaseFilename=OpenQCY-Desktop-Setup
+OutputBaseFilename={#OutputBaseFilename}
 SetupIconFile=..\Assets\AppIcon-v2.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 LicenseFile=..\LICENSE
