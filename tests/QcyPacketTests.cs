@@ -147,4 +147,65 @@ public sealed class QcyPacketTests
             },
             QcyCommands.SetNoiseMode(mode));
     }
+
+    [TestMethod]
+    [DataRow("84:AC:60:C0:9B:6F", "84:AC:60:C0:9B:6F")]
+    [DataRow("84-ac-60-c0-9b-6f", "84:AC:60:C0:9B:6F")]
+    [DataRow("84AC60C09B6F", "84:AC:60:C0:9B:6F")]
+    public void TryParseAddressParsesVariousValidFormats(string input, string expectedFormatted)
+    {
+        Assert.IsTrue(QcyAdvertisement.TryParseAddress(input, out var address));
+        Assert.AreEqual(expectedFormatted, QcyAdvertisement.FormatAddress(address));
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("   ")]
+    [DataRow(null)]
+    [DataRow("not-a-mac")]
+    [DataRow("84:AC:60:C0")]
+    [DataRow("84:AC:60:C0:9B:6F:AA")]
+    [DataRow("84:AC:60:C0:9B:ZZ")]
+    public void TryParseAddressRejectsInvalidInputs(string? input)
+    {
+        Assert.IsFalse(QcyAdvertisement.TryParseAddress(input, out var address));
+        Assert.AreEqual(0UL, address);
+    }
+
+    [TestMethod]
+    public void QcyDeviceCacheRecordsAndFindsControlAddress()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"qcy_cache_test_{Guid.NewGuid():N}.json");
+        try
+        {
+            var cache = new QcyDeviceCache(tempFile);
+            ulong classic = 0x84AC602202FA;
+            ulong control = 0x84AC60C09B6F;
+
+            cache.Record("QCY-T13 ANC", 18290, control, classic);
+
+            // Find by classic MAC
+            var foundByClassic = cache.FindControlAddress(classic);
+            Assert.AreEqual(control, foundByClassic);
+
+            // Find by control MAC
+            var foundByControl = cache.FindControlAddress(control);
+            Assert.AreEqual(control, foundByControl);
+
+            // Find by name
+            var foundByName = cache.FindControlAddress(null, "QCY-T13 ANC");
+            Assert.AreEqual(control, foundByName);
+
+            // Reload from disk into new instance
+            var reloaded = new QcyDeviceCache(tempFile);
+            Assert.AreEqual(control, reloaded.FindControlAddress(classic));
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
 }

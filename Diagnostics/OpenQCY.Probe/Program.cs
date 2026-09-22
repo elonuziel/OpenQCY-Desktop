@@ -29,6 +29,16 @@ try
     var willDisableWearDetection = args.Contains("--disable-wear-detection", StringComparer.OrdinalIgnoreCase);
     var windowsBatteryOnly = args.Contains("--windows-battery", StringComparer.OrdinalIgnoreCase);
 
+    var addressArgIndex = Array.FindIndex(args, a =>
+        string.Equals(a, "--address", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(a, "--control", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(a, "-a", StringComparison.OrdinalIgnoreCase));
+    string? directAddressStr = null;
+    if (addressArgIndex >= 0 && addressArgIndex < args.Length - 1)
+    {
+        directAddressStr = args[addressArgIndex + 1];
+    }
+
     var customModelArgIndex = Array.FindIndex(args, a => string.Equals(a, "--custom-model", StringComparison.OrdinalIgnoreCase));
     if (customModelArgIndex >= 0 && customModelArgIndex < args.Length - 1)
     {
@@ -54,7 +64,6 @@ try
     Console.WriteLine(willDisableWearDetection
         ? "OpenQCY Probe · diagnostics and requested wear-detection change"
         : "OpenQCY Probe · read-only local diagnostics");
-    Console.WriteLine("Open the case and keep both earbuds near the computer.");
 
     var transport = new WindowsBluetoothTransport();
     if (windowsBatteryOnly)
@@ -72,35 +81,94 @@ try
         return 0;
     }
 
-    var devices = await transport.ScanForQcyDevicesAsync(TimeSpan.FromSeconds(12));
-    if (devices.Count == 0)
+    BluetoothDeviceInfo? target = null;
+    if (!string.IsNullOrWhiteSpace(directAddressStr))
     {
-        Console.WriteLine("No live BLE advertisement found; checking Windows paired QCY devices…");
-        var paired = await transport.FindPairedQcyDevicesAsync();
-        if (paired.Count > 0)
+        if (QcyAdvertisement.TryParseAddress(directAddressStr, out var parsedAddress))
         {
-            devices = paired;
-            Console.WriteLine($"Found {paired.Count} paired QCY device(s) in Windows cache.");
+            var formatted = QcyAdvertisement.FormatAddress(parsedAddress);
+            Console.WriteLine($"Direct target address specified: {formatted}");
+            target = new BluetoothDeviceInfo(
+                formatted,
+                "QCY Earbuds",
+                parsedAddress,
+                parsedAddress,
+                null,
+                QcyUuids.T13AncVendorId,
+                short.MinValue,
+                0, 0, 0, false, false, false,
+                DateTimeOffset.UtcNow);
         }
         else
         {
-            Console.Error.WriteLine("No QCY BLE advertisement (0x521C) or paired QCY device was found.");
-            Console.Error.WriteLine("Tip: Close the earbud case lid, wait 2 seconds, open the lid again near the PC, and retry.");
-            return 2;
+            Console.Error.WriteLine($"Invalid Bluetooth MAC address: {directAddressStr}");
+            Console.Error.WriteLine("Expected format: XX:XX:XX:XX:XX:XX (e.g. 84:AC:60:C0:9B:6F)");
+            return 1;
         }
     }
 
-    foreach (var device in devices)
+    if (target is null)
     {
-        var recognized = QcyDeviceRegistry.FindByVendorId(device.VendorId);
-        var label = recognized is not null ? $"[{recognized.DisplayName}] " : "";
-        Console.WriteLine(
-            $"Found: {label}{device.Name} · vendor {device.VendorId} (0x{device.VendorId:X4}) · RSSI {device.SignalStrength} dBm · " +
-            $"L {device.LeftBattery}% / R {device.RightBattery}% / case {device.CaseBattery}%");
+        Console.WriteLine("Scanning for QCY BLE advertisement (12s)…");
+        Console.WriteLine("Tip: To broadcast telemetry, place earbuds in case, close the lid for 3s, then open the lid.");
+        Console.WriteLine("Note: Ensure phone Bluetooth is disconnected so it doesn't occupy the BLE control channel.");
+        Console.WriteLine();
+
+        var devices = await transport.ScanForQcyDevicesAsync(TimeSpan.FromSeconds(12));
+        if (devices.Count == 0)
+        {
+            Console.WriteLine("No live BLE advertisement found; checking Windows paired QCY devices…");
+            var paired = await transport.FindPairedQcyDevicesAsync();
+            if (paired.Count > 0)
+            {
+                devices = paired;
+                Console.WriteLine($"Found {paired.Count} paired QCY device(s) in Windows cache.");
+            }
+        }
+
+        if (devices.Count == 0)
+        {
+            var cachedItems = QcyDeviceCache.Instance.GetAll()
+                .Where(item => item.ControlAddress.HasValue && item.ControlAddress.Value != 0)
+                .ToArray();
+            if (cachedItems.Length > 0)
+            {
+                Console.WriteLine($"Found {cachedItems.Length} remembered QCY device(s) in local cache.");
+                devices = cachedItems.Select(item => new BluetoothDeviceInfo(
+                    QcyAdvertisement.FormatAddress(item.ControlAddress!.Value),
+                    string.IsNullOrWhiteSpace(item.Name) ? "QCY Earbuds" : item.Name,
+                    item.ClassicAddress ?? item.ControlAddress!.Value,
+                    item.ControlAddress,
+                    null,
+                    item.VendorId != 0 ? item.VendorId : QcyUuids.T13AncVendorId,
+                    short.MinValue,
+                    0, 0, 0, false, false, false,
+                    item.LastSeen)).ToArray();
+            }
+        }
+
+        if (devices.Count == 0)
+        {
+            Console.Error.WriteLine("No QCY BLE advertisement (0x521C), paired QCY device, or cached device was found.");
+            Console.Error.WriteLine("Tip: Close the earbud case lid, wait 3 seconds, open the lid again near the PC, and retry.");
+            Console.Error.WriteLine("Tip: Or run with --address <mac>, e.g.: OpenQCY.Probe.exe --address 84:AC:60:C0:9B:6F");
+            return 2;
+        }
+
+        foreach (var device in devices)
+        {
+            var recognized = QcyDeviceRegistry.FindByVendorId(device.VendorId);
+            var label = recognized is not null ? $"[{recognized.DisplayName}] " : "";
+            Console.WriteLine(
+                $"Found: {label}{device.Name} · vendor {device.VendorId} (0x{device.VendorId:X4}) · RSSI {device.SignalStrength} dBm · " +
+                $"L {device.LeftBattery}% / R {device.RightBattery}% / case {device.CaseBattery}%");
+        }
+
+        target = devices.FirstOrDefault(device => QcyDeviceRegistry.IsSupported(device.VendorId)) ?? devices[0];
     }
 
-    var target = devices.FirstOrDefault(device => QcyDeviceRegistry.IsSupported(device.VendorId)) ?? devices[0];
-    Console.WriteLine($"Connecting to the {target.Name} control channel…");
+    var targetAddr = target.ControlAddress ?? target.BluetoothAddress;
+    Console.WriteLine($"Connecting to {target.Name} ({QcyAdvertisement.FormatAddress(targetAddr)}) control channel…");
 
     await using var connection = await transport.ConnectAsync(target);
 

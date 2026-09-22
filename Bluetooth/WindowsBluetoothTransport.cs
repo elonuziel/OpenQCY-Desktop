@@ -79,25 +79,39 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             }
         }
 
-        var pairedSelector = BluetoothLEDevice.GetDeviceSelectorFromPairingState(true);
-        var pairedDevices = await DeviceInformation.FindAllAsync(pairedSelector);
-        foreach (var pairedDevice in pairedDevices.Where(device => QcyDeviceRegistry.LooksLikeSupported(device.Name)))
+        var bleSelectors = new[]
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            BluetoothLEDevice.GetDeviceSelectorFromPairingState(true),
+            BluetoothLEDevice.GetDeviceSelector(),
+        };
+
+        foreach (var selector in bleSelectors)
+        {
             try
             {
-                var device = await CreateKnownDeviceAsync(
-                    pairedDevice.Id,
-                    pairedDevice.Name,
-                    cancellationToken);
-                if (device is not null)
+                var pairedDevices = await DeviceInformation.FindAllAsync(selector);
+                foreach (var pairedDevice in pairedDevices.Where(device => QcyDeviceRegistry.LooksLikeSupported(device.Name)))
                 {
-                    devices.Add(device);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var device = await CreateKnownDeviceAsync(
+                            pairedDevice.Id,
+                            pairedDevice.Name,
+                            cancellationToken);
+                        if (device is not null)
+                        {
+                            devices.Add(device);
+                        }
+                    }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        // A cached Windows entry may be stale. Other candidates can still be valid.
+                    }
                 }
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
-                // A cached Windows entry may be stale. Other candidates can still be valid.
             }
         }
 
@@ -122,11 +136,13 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                     : classicDevice.Name;
                 var vendorId = matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.N70BlackVendorId;
 
+                var cachedControl = QcyDeviceCache.Instance.FindControlAddress(classicDevice.BluetoothAddress, name);
+
                 devices.Add(new BluetoothDeviceInfo(
                     pairedClassic.Id,
                     name,
                     classicDevice.BluetoothAddress,
-                    null,
+                    cachedControl,
                     null,
                     vendorId,
                     short.MinValue,
@@ -223,6 +239,16 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                     RightBattery = info.RightBattery > 0 ? info.RightBattery : previous.RightBattery,
                     CaseBattery = info.CaseBattery > 0 ? info.CaseBattery : previous.CaseBattery,
                 });
+
+            if (parsedAdv?.ControlAddress is { } ctrl && ctrl != 0)
+            {
+                QcyDeviceCache.Instance.Record(
+                    name,
+                    vendorId,
+                    ctrl,
+                    parsedAdv.OtherAddress,
+                    eventArgs.BluetoothAddress);
+            }
         }
 
         watcher.Received += OnReceived;
@@ -253,6 +279,12 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         if (device.ControlAddress.HasValue)
         {
             candidateAddresses.Add(device.ControlAddress.Value);
+        }
+
+        var cachedControl = QcyDeviceCache.Instance.FindControlAddress(device.BluetoothAddress, device.Name);
+        if (cachedControl.HasValue)
+        {
+            candidateAddresses.Add(cachedControl.Value);
         }
 
         if (device.BluetoothAddress != 0)
@@ -291,10 +323,19 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                     continue;
                 }
 
-                return await WindowsBluetoothDeviceConnection.CreateAsync(
+                var connection = await WindowsBluetoothDeviceConnection.CreateAsync(
                     bluetoothDevice,
                     service,
                     cancellationToken);
+
+                QcyDeviceCache.Instance.Record(
+                    device.Name,
+                    device.VendorId,
+                    address,
+                    device.OtherAddress ?? (device.BluetoothAddress != address ? device.BluetoothAddress : null),
+                    device.BluetoothAddress);
+
+                return connection;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -496,13 +537,14 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         var name = string.IsNullOrWhiteSpace(bluetoothDevice.Name)
             ? fallbackName ?? matchedModel?.DisplayName ?? "QCY Earbuds"
             : bluetoothDevice.Name;
-        var vendorId = matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.N70BlackVendorId;
+        var cachedControl = QcyDeviceCache.Instance.FindControlAddress(bluetoothDevice.BluetoothAddress, name);
+        var controlAddress = cachedControl ?? bluetoothDevice.BluetoothAddress;
 
         return new BluetoothDeviceInfo(
             deviceId,
             name,
             bluetoothDevice.BluetoothAddress,
-            null,
+            controlAddress,
             null,
             vendorId,
             short.MinValue,

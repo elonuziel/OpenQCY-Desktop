@@ -57,6 +57,23 @@ public sealed record QcyAdvertisement(
         string.Join(":", Enumerable.Range(0, 6)
             .Select(index => ((address >> ((5 - index) * 8)) & 0xFF).ToString("X2")));
 
+    public static bool TryParseAddress(string? text, out ulong address)
+    {
+        address = 0;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var cleaned = text.Replace(":", string.Empty).Replace("-", string.Empty).Trim();
+        if (cleaned.Length != 12)
+        {
+            return false;
+        }
+
+        return ulong.TryParse(cleaned, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out address);
+    }
+
     private static byte BatteryPercentage(byte value) =>
         (byte)Math.Min(value & 0x7F, 100);
 
