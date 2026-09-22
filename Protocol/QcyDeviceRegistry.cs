@@ -181,7 +181,12 @@ public static class QcyDeviceRegistry
             return null;
         }
 
-        return ModelsById.Values.FirstOrDefault(model => model.MatchesBluetoothName(name));
+        return ModelsById.Values
+            .Select(model => (Model: model, Score: model.GetBluetoothNameMatchScore(name)))
+            .Where(entry => entry.Score > 0)
+            .OrderByDescending(entry => entry.Score)
+            .Select(entry => entry.Model)
+            .FirstOrDefault();
     }
 
     public static bool IsSupported(ushort vendorId) =>

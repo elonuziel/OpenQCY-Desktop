@@ -37,15 +37,26 @@ public sealed record QcyDeviceDefinition
     public bool MatchesVendorId(ushort vendorId) =>
         VendorIds.Contains(vendorId);
 
-    public bool MatchesBluetoothName(string? name)
+    public int GetBluetoothNameMatchScore(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return false;
+            return 0;
         }
 
-        return BluetoothNamePatterns.Any(pattern =>
-            name.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+        var maxMatchLength = 0;
+        foreach (var pattern in BluetoothNamePatterns)
+        {
+            if (name.Contains(pattern, StringComparison.OrdinalIgnoreCase) && pattern.Length > maxMatchLength)
+            {
+                maxMatchLength = pattern.Length;
+            }
+        }
+
+        return maxMatchLength;
     }
+
+    public bool MatchesBluetoothName(string? name) =>
+        GetBluetoothNameMatchScore(name) > 0;
 }
 
