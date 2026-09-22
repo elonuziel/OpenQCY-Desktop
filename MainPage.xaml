@@ -375,7 +375,7 @@
                                     <TextBlock Style="{StaticResource CardTitleStyle}" Text="Wind reduction" />
                                     <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionStyle}" Text="Softens wind noise while active noise cancellation is enabled." />
                                 </StackPanel>
-                                <ToggleSwitch HorizontalAlignment="Right" IsOn="{x:Bind ViewModel.WindReductionEnabled, Mode=TwoWay}" />
+                                <ToggleSwitch HorizontalAlignment="Right" IsEnabled="{x:Bind ViewModel.IsWindDetectionSupported, Mode=OneWay}" IsOn="{x:Bind ViewModel.WindReductionEnabled, Mode=TwoWay}" />
                             </Grid>
                         </Border>
                     </Grid>

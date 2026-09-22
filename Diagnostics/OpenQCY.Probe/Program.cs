@@ -76,7 +76,7 @@ await client.RefreshAsync();
 
 var state = client.State;
 Console.WriteLine($"Connected: {state.DeviceName} (Model: {state.Model?.DisplayName ?? "Generic / Fallback"})");
-Console.WriteLine($"Capabilities: ANC={state.Capabilities.SupportsNoiseControl}, LDAC={state.Capabilities.SupportsLdac}, Multipoint={state.Capabilities.SupportsMultipoint}, Wind={state.Capabilities.SupportsWindNoiseReduction}, Presets={state.Capabilities.SupportsEqualizerPresets}");
+Console.WriteLine($"Capabilities: ANC scenes={state.Capabilities.SupportsAncScenes}, LDAC={state.Capabilities.SupportsLdac}, Multipoint={state.Capabilities.SupportsMultipoint}, Wind={state.Capabilities.SupportsWindDetection}, EQ bands={state.Capabilities.EqualizerBands.Count}");
 Console.WriteLine($"Firmware: {state.FirmwareVersion ?? "not reported"}");
 Console.WriteLine($"Battery: L {Percent(state.Battery.Left)} · R {Percent(state.Battery.Right)} · case {Percent(state.Battery.Case)}");
 Console.WriteLine($"Wear detection: {BooleanText(state.WearDetectionEnabled)} · protocol {state.WearDetectionProtocol}");
