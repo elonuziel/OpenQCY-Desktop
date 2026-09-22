@@ -9,6 +9,8 @@
   <ItemGroup>
     <Compile Include="QcyAdvertisement.cs" />
     <Compile Include="QcyCommands.cs" />
+    <Compile Include="QcyDeviceDefinition.cs" />
+    <Compile Include="QcyDeviceRegistry.cs" />
     <Compile Include="QcyPacket.cs" />
     <Compile Include="QcyUuids.cs" />
   </ItemGroup>

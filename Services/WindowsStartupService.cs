@@ -1,4 +1,6 @@
+#if WINDOWS || NET10_0_WINDOWS10_0_26100_0_OR_GREATER
 using Microsoft.Win32;
+#endif
 
 namespace OpenQCY_Desktop.Services;
 
@@ -12,17 +14,32 @@ public sealed class WindowsStartupService
     {
         get
         {
+#if WINDOWS || NET10_0_WINDOWS10_0_26100_0_OR_GREATER
+            if (!OperatingSystem.IsWindows())
+            {
+                return false;
+            }
+
             using var runKey = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: false);
             var registeredCommand = runKey?.GetValue(RunValueName) as string;
             return string.Equals(
                 registeredCommand,
                 BuildStartupCommand(GetExecutablePath()),
                 StringComparison.OrdinalIgnoreCase);
+#else
+            return false;
+#endif
         }
     }
 
     public void SetEnabled(bool enabled)
     {
+#if WINDOWS || NET10_0_WINDOWS10_0_26100_0_OR_GREATER
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var runKey = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true)
             ?? throw new InvalidOperationException("Could not access Windows startup settings.");
 
@@ -37,6 +54,7 @@ public sealed class WindowsStartupService
         {
             runKey.DeleteValue(RunValueName, throwOnMissingValue: false);
         }
+#endif
     }
 
     internal static bool IsStartupLaunch(IReadOnlyList<string> commandLineArguments) =>

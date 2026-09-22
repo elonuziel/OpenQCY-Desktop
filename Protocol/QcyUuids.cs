@@ -13,7 +13,14 @@ public static class QcyUuids
     public const ushort CompanyId = 0x521C;
     public const ushort N70BlackVendorId = 23872;
     public const ushort N70AlternateVendorId = 23877;
+    public const ushort T13AncVendorId = 18290;
+    public const ushort T13Anc2VendorId = 18294;
+    public const ushort T13Anc2AppVendorId = 18295;
+    public const ushort T15AncVendorId = 32882;
 
     public static bool IsN70(ushort vendorId) =>
         vendorId is N70BlackVendorId or N70AlternateVendorId;
+
+    public static bool IsSupported(ushort vendorId) =>
+        QcyDeviceRegistry.IsSupported(vendorId);
 }

@@ -2,13 +2,6 @@ using OpenQCY_Desktop.Protocol;
 
 namespace OpenQCY_Desktop.Device;
 
-public enum QcyWearDetectionProtocol
-{
-    Unknown,
-    Legacy,
-    WearingDetection,
-}
-
 public sealed record QcyBatteryState(
     byte? Left,
     byte? Right,
@@ -21,6 +14,8 @@ public sealed record QcyDeviceState
 {
     public bool IsConnected { get; init; }
     public string DeviceName { get; init; } = "QCY device";
+    public QcyDeviceDefinition? Model { get; init; }
+    public QcyDeviceCapabilities Capabilities => Model?.Capabilities ?? new();
     public QcyBatteryState Battery { get; init; } = new(null, null, null);
     public string? FirmwareVersion { get; init; }
     public bool? WearDetectionEnabled { get; init; }

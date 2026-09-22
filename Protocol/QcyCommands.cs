@@ -225,7 +225,7 @@ public static class QcyCommands
         int[] frequencies = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
         if (gains.Count != frequencies.Length)
         {
-            throw new ArgumentException("The N70 equalizer requires exactly 10 bands.", nameof(gains));
+            throw new ArgumentException("The equalizer requires exactly 10 bands.", nameof(gains));
         }
 
         var parameters = new byte[3 + frequencies.Length * 7];

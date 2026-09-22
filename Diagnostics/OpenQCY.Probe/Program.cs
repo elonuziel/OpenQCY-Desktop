@@ -6,6 +6,29 @@ using OpenQCY_Desktop.Protocol;
 Console.OutputEncoding = Encoding.UTF8;
 var willDisableWearDetection = args.Contains("--disable-wear-detection", StringComparer.OrdinalIgnoreCase);
 var windowsBatteryOnly = args.Contains("--windows-battery", StringComparer.OrdinalIgnoreCase);
+
+var customModelArgIndex = Array.FindIndex(args, a => string.Equals(a, "--custom-model", StringComparison.OrdinalIgnoreCase));
+if (customModelArgIndex >= 0 && customModelArgIndex < args.Length - 1)
+{
+    var customModelPath = args[customModelArgIndex + 1];
+    if (File.Exists(customModelPath))
+    {
+        var success = QcyDeviceRegistry.LoadCustomJson(File.ReadAllText(customModelPath));
+        if (success)
+        {
+            Console.WriteLine($"Loaded custom model definition(s) from {customModelPath}.");
+        }
+        else
+        {
+            Console.Error.WriteLine($"Failed to parse custom model JSON from {customModelPath}.");
+        }
+    }
+    else
+    {
+        Console.Error.WriteLine($"Custom model file not found: {customModelPath}");
+    }
+}
+
 Console.WriteLine(willDisableWearDetection
     ? "OpenQCY Probe · diagnostics and requested wear-detection change"
     : "OpenQCY Probe · read-only local diagnostics");
@@ -17,7 +40,7 @@ if (windowsBatteryOnly)
     var windowsBattery = await transport.FindWindowsBatteryAsync();
     if (windowsBattery is null)
     {
-        Console.Error.WriteLine("Windows did not provide a battery reading for the N70.");
+        Console.Error.WriteLine("Windows did not provide a battery reading for any supported QCY device.");
         return 3;
     }
 
@@ -36,12 +59,14 @@ if (devices.Count == 0)
 
 foreach (var device in devices)
 {
+    var recognized = QcyDeviceRegistry.Find(device.VendorId);
+    var label = recognized is not null ? $"[{recognized.DisplayName}] " : "";
     Console.WriteLine(
-        $"Found: {device.Name} · vendor {device.VendorId} · RSSI {device.SignalStrength} dBm · " +
+        $"Found: {label}{device.Name} · vendor {device.VendorId} (0x{device.VendorId:X4}) · RSSI {device.SignalStrength} dBm · " +
         $"L {device.LeftBattery}% / R {device.RightBattery}% / case {device.CaseBattery}%");
 }
 
-var target = devices.FirstOrDefault(device => QcyUuids.IsN70(device.VendorId)) ?? devices[0];
+var target = devices.FirstOrDefault(device => QcyDeviceRegistry.IsSupported(device.VendorId)) ?? devices[0];
 Console.WriteLine($"Connecting to the {target.Name} control channel…");
 
 await using var connection = await transport.ConnectAsync(target);
@@ -50,7 +75,8 @@ client.ProtocolTrace += (_, line) => Console.WriteLine($"  {line}");
 await client.RefreshAsync();
 
 var state = client.State;
-Console.WriteLine($"Connected: {state.DeviceName}");
+Console.WriteLine($"Connected: {state.DeviceName} (Model: {state.Model?.DisplayName ?? "Generic / Fallback"})");
+Console.WriteLine($"Capabilities: ANC={state.Capabilities.SupportsNoiseControl}, LDAC={state.Capabilities.SupportsLdac}, Multipoint={state.Capabilities.SupportsMultipoint}, Wind={state.Capabilities.SupportsWindNoiseReduction}, Presets={state.Capabilities.SupportsEqualizerPresets}");
 Console.WriteLine($"Firmware: {state.FirmwareVersion ?? "not reported"}");
 Console.WriteLine($"Battery: L {Percent(state.Battery.Left)} · R {Percent(state.Battery.Right)} · case {Percent(state.Battery.Case)}");
 Console.WriteLine($"Wear detection: {BooleanText(state.WearDetectionEnabled)} · protocol {state.WearDetectionProtocol}");
@@ -68,7 +94,7 @@ foreach (var characteristic in connection.Characteristics.OrderBy(item => item.U
 
 if (willDisableWearDetection)
 {
-    Console.WriteLine("Disabling wear detection and waiting for N70 confirmation…");
+    Console.WriteLine($"Disabling wear detection and waiting for {state.DeviceName} confirmation…");
     await client.SetWearDetectionAsync(false);
     Console.WriteLine($"Wear detection after confirmation: {BooleanText(client.State.WearDetectionEnabled)}");
 }

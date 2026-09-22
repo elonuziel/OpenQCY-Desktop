@@ -15,7 +15,7 @@ Download and run `OpenQCY-Desktop-Setup.exe`. The installer is self-contained, i
 > [!NOTE]
 > Community builds are currently unsigned. Windows may show an "Unknown publisher" or Microsoft Defender SmartScreen warning. Verify the download with the release's `SHA256SUMS.txt` file.
 
-OpenQCY Desktop is an open-source Windows controller for QCY earbuds. The first supported target is the **QCY MeloBuds N70 (HT18)**.
+OpenQCY Desktop is an open-source Windows controller for QCY earbuds, supporting the **QCY MeloBuds N70**, **QCY T13 ANC**, **QCY T13 ANC 2**, and **QCY Buds ANC / T15 ANC**, with an extensible architecture for adding new models.
 
 > [!IMPORTANT]
 > This is an independent community project. It is not affiliated with, endorsed by, or supported by QCY or Dongguan Hele Electronics Co., Ltd. QCY and MeloBuds are trademarks of their respective owners.
@@ -80,7 +80,7 @@ dotnet test tests/OpenQCY.Desktop.Tests.csproj -c Release
 pwsh ./scripts/build-installer.ps1 -Version 0.2.0
 ```
 
-The GitHub Actions pipeline builds both distributions. Pushing a semantic version tag such as `v0.2.0` publishes the installer, portable ZIP, and checksums to GitHub Releases. See the [release guide](docs/releasing.md), [Architecture](docs/architecture.md), [Protocol research](docs/protocol-research.md), and the [performance baseline](docs/performance.md).
+The GitHub Actions pipeline builds both distributions. Pushing a semantic version tag such as `v0.2.0` publishes the installer, portable ZIP, and checksums to GitHub Releases. See the [release guide](docs/releasing.md), [Architecture](docs/architecture.md), [Adding new models](docs/adding-new-models.md), [Protocol research](docs/protocol-research.md), and the [performance baseline](docs/performance.md).
 
 ## Safety
 

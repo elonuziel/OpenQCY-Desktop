@@ -157,7 +157,7 @@ internal sealed class WindowsBluetoothDeviceConnection : IBluetoothDeviceConnect
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _characteristics.TryGetValue(uuid, out var characteristic)
             ? characteristic
-            : throw new NotSupportedException($"The N70 did not expose characteristic {uuid:D}.");
+            : throw new NotSupportedException($"The device did not expose characteristic {uuid:D}.");
     }
 
     private void Characteristic_ValueChanged(GattCharacteristic sender, WindowsGattValueChangedEventArgs args)

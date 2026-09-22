@@ -17,10 +17,12 @@ public sealed class QcyDeviceClient : IAsyncDisposable
     private QcyDeviceClient(IBluetoothDeviceConnection connection)
     {
         _connection = connection;
+        var model = QcyDeviceRegistry.FindByBluetoothName(connection.Name);
         State = new QcyDeviceState
         {
             IsConnected = connection.IsConnected,
-            DeviceName = connection.Name,
+            DeviceName = model?.DisplayName ?? connection.Name,
+            Model = model,
         };
 
         _connection.ValueChanged += Connection_ValueChanged;
@@ -53,18 +55,52 @@ public sealed class QcyDeviceClient : IAsyncDisposable
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         await ReadDirectCharacteristicsAsync(cancellationToken);
-        await QueryAsync(0x2C, cancellationToken);
-        if (State.WearDetectionProtocol == QcyWearDetectionProtocol.Unknown)
+
+        var wearProtocol = State.Capabilities.WearDetectionProtocol;
+        if (wearProtocol == QcyWearDetectionProtocol.WearingDetection)
+        {
+            await QueryAsync(0x2C, cancellationToken);
+        }
+        else if (wearProtocol == QcyWearDetectionProtocol.Legacy)
         {
             await QueryAsync(0x06, cancellationToken);
         }
+        else if (wearProtocol == QcyWearDetectionProtocol.Unknown)
+        {
+            await QueryAsync(0x2C, cancellationToken);
+            if (State.WearDetectionProtocol == QcyWearDetectionProtocol.Unknown)
+            {
+                await QueryAsync(0x06, cancellationToken);
+            }
+        }
 
-        foreach (var opcode in new byte[]
+        await QueryAsync(0x17, cancellationToken);
+        await QueryAsync(0x09, cancellationToken);
+        await QueryAsync(0x10, cancellationToken);
+
+        if (State.Model is null || State.Capabilities.SupportsLdac)
         {
-            0x17, 0x09, 0x10, 0x23, 0x24, 0x2A, 0x1D, 0x14,
-        })
+            await QueryAsync(0x23, cancellationToken);
+        }
+
+        if (State.Model is null || State.Capabilities.SupportsMultipoint)
         {
-            await QueryAsync(opcode, cancellationToken);
+            await QueryAsync(0x24, cancellationToken);
+        }
+
+        if (State.Model is null || State.Capabilities.SupportsWindDetection)
+        {
+            await QueryAsync(0x2A, cancellationToken);
+        }
+
+        if (State.Model is null || State.Capabilities.SupportsPromptVolume)
+        {
+            await QueryAsync(0x1D, cancellationToken);
+        }
+
+        if (State.Model is null || State.Capabilities.SupportsAutoPowerOff)
+        {
+            await QueryAsync(0x14, cancellationToken);
         }
 
         if (State.Battery.Left is null)
@@ -108,7 +144,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
         else
         {
             throw new NotSupportedException(
-                "The N70 did not confirm a compatible wear-detection command on this connection.");
+                $"The {State.DeviceName} did not confirm a compatible wear-detection command on this connection.");
         }
 
         await WriteAndConfirmAsync(opcode, packet, cancellationToken);
@@ -134,7 +170,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
         if (confirmed != expected)
         {
             throw new InvalidOperationException(
-                $"The N70 reported {FormatNoiseState(confirmed)}, but the app requested {FormatNoiseState(expected)}.");
+                $"The {State.DeviceName} reported {FormatNoiseState(confirmed)}, but the app requested {FormatNoiseState(expected)}.");
         }
     }
 
@@ -304,7 +340,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
         if (response is null)
         {
             throw new InvalidOperationException(
-                $"The N70 did not confirm command 0x{opcode:X2}; the change was not considered applied.");
+                $"The {State.DeviceName} did not confirm command 0x{opcode:X2}; the change was not considered applied.");
         }
     }
 
@@ -384,7 +420,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
         {
             foreach (var pending in _pendingResponses.Values)
             {
-                pending.TrySetException(new InvalidOperationException("The N70 disconnected during the command."));
+                pending.TrySetException(new InvalidOperationException($"The {State.DeviceName} disconnected during the command."));
             }
         }
     }

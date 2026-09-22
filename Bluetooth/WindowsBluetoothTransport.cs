@@ -22,7 +22,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         cancellationToken.ThrowIfCancellationRequested();
 
         return pairedDevices
-            .Where(device => LooksLikeN70(device.Name))
+            .Where(device => QcyDeviceRegistry.LooksLikeSupported(device.Name))
             .Select(device => new
             {
                 device.Name,
@@ -77,7 +77,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
 
         var pairedSelector = BluetoothLEDevice.GetDeviceSelectorFromPairingState(true);
         var pairedDevices = await DeviceInformation.FindAllAsync(pairedSelector);
-        foreach (var pairedDevice in pairedDevices.Where(device => LooksLikeN70(device.Name)))
+        foreach (var pairedDevice in pairedDevices.Where(device => QcyDeviceRegistry.LooksLikeSupported(device.Name)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -136,9 +136,8 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                 var name = eventArgs.Advertisement.LocalName;
                 if (string.IsNullOrWhiteSpace(name))
                 {
-                    name = QcyUuids.IsN70(advertisement.VendorId)
-                        ? "QCY MeloBuds N70"
-                        : $"QCY device ({advertisement.VendorId})";
+                    var model = QcyDeviceRegistry.FindByVendorId(advertisement.VendorId);
+                    name = model?.DisplayName ?? $"QCY device ({advertisement.VendorId})";
                 }
 
                 var info = new BluetoothDeviceInfo(
@@ -180,7 +179,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         }
 
         return devices.Values
-            .OrderByDescending(device => QcyUuids.IsN70(device.VendorId))
+            .OrderByDescending(device => QcyDeviceRegistry.IsSupported(device.VendorId))
             .ThenByDescending(device => device.SignalStrength)
             .ToArray();
     }
@@ -262,12 +261,6 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         return value;
     }
 
-    private static bool LooksLikeN70(string? name) =>
-        !string.IsNullOrWhiteSpace(name) &&
-        name.Contains("N70", StringComparison.OrdinalIgnoreCase) &&
-        (name.Contains("QCY", StringComparison.OrdinalIgnoreCase) ||
-            name.Contains("MeloBuds", StringComparison.OrdinalIgnoreCase));
-
     private static async Task<BluetoothDeviceInfo?> CreateKnownDeviceAsync(
         string deviceId,
         string? fallbackName,
@@ -280,16 +273,20 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             return null;
         }
 
+        var matchedModel = QcyDeviceRegistry.FindByBluetoothName(bluetoothDevice.Name)
+            ?? QcyDeviceRegistry.FindByBluetoothName(fallbackName);
         var name = string.IsNullOrWhiteSpace(bluetoothDevice.Name)
-            ? fallbackName ?? "QCY MeloBuds N70"
+            ? fallbackName ?? matchedModel?.DisplayName ?? "QCY Earbuds"
             : bluetoothDevice.Name;
+        var vendorId = matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.N70BlackVendorId;
+
         return new BluetoothDeviceInfo(
             deviceId,
             name,
             bluetoothDevice.BluetoothAddress,
             null,
             null,
-            QcyUuids.N70BlackVendorId,
+            vendorId,
             short.MinValue,
             0,
             0,
