@@ -259,7 +259,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             BluetoothLEDevice? bluetoothDevice = null;
             try
             {
-                bluetoothDevice = await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+                bluetoothDevice = await GetBluetoothLEDeviceAsync(address, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (bluetoothDevice is null)
                 {
@@ -267,23 +267,11 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                     continue;
                 }
 
-                var services = await bluetoothDevice.GetGattServicesForUuidAsync(
-                    QcyUuids.MainService,
-                    BluetoothCacheMode.Uncached);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (services.Status != GattCommunicationStatus.Success || services.Services.Count == 0)
+                var service = await FindQcyServiceAsync(bluetoothDevice, cancellationToken, diagnostics, address);
+                if (service is null)
                 {
-                    diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: A001 service not found ({services.Status})");
                     bluetoothDevice.Dispose();
-                    bluetoothDevice = null;
                     continue;
-                }
-
-                var service = services.Services[0];
-                for (var index = 1; index < services.Services.Count; index++)
-                {
-                    services.Services[index].Dispose();
                 }
 
                 return await WindowsBluetoothDeviceConnection.CreateAsync(
@@ -302,6 +290,159 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             diagnostics.Count == 0
                 ? "No QCY control address was advertised."
                 : string.Join(Environment.NewLine, diagnostics));
+    }
+
+    private static async Task<BluetoothLEDevice?> GetBluetoothLEDeviceAsync(
+        ulong address,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address, BluetoothAddressType.Public);
+            if (device is not null)
+            {
+                return device;
+            }
+        }
+        catch
+        {
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(address, BluetoothAddressType.Random);
+            if (device is not null)
+            {
+                return device;
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            return await BluetoothLEDevice.FromBluetoothAddressAsync(address);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static async Task<GattDeviceService?> FindQcyServiceAsync(
+        BluetoothLEDevice bluetoothDevice,
+        CancellationToken cancellationToken,
+        List<string> diagnostics,
+        ulong address)
+    {
+        try
+        {
+            var directResult = await bluetoothDevice.GetGattServicesForUuidAsync(
+                QcyUuids.MainService,
+                BluetoothCacheMode.Uncached);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (directResult.Status == GattCommunicationStatus.Success && directResult.Services.Count > 0)
+            {
+                for (var i = 1; i < directResult.Services.Count; i++)
+                {
+                    directResult.Services[i].Dispose();
+                }
+
+                return directResult.Services[0];
+            }
+        }
+        catch
+        {
+        }
+
+        GattDeviceServicesResult? allServicesResult = null;
+        try
+        {
+            allServicesResult = await bluetoothDevice.GetGattServicesAsync(BluetoothCacheMode.Uncached);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch
+        {
+        }
+
+        if (allServicesResult is null || allServicesResult.Status != GattCommunicationStatus.Success || allServicesResult.Services.Count == 0)
+        {
+            try
+            {
+                allServicesResult = await bluetoothDevice.GetGattServicesAsync(BluetoothCacheMode.Cached);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch
+            {
+            }
+        }
+
+        if (allServicesResult is null || allServicesResult.Status != GattCommunicationStatus.Success || allServicesResult.Services.Count == 0)
+        {
+            diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: A001 service not found ({allServicesResult?.Status.ToString() ?? "Failed"})");
+            return null;
+        }
+
+        var services = allServicesResult.Services;
+        var foundUuids = services.Select(s => s.Uuid.ToString()).ToArray();
+
+        var matchedIndex = -1;
+        for (var i = 0; i < services.Count; i++)
+        {
+            var uuid = services[i].Uuid;
+            if (uuid == QcyUuids.MainService ||
+                uuid.ToString().StartsWith("0000a001", StringComparison.OrdinalIgnoreCase))
+            {
+                matchedIndex = i;
+                break;
+            }
+        }
+
+        if (matchedIndex < 0)
+        {
+            for (var i = 0; i < services.Count; i++)
+            {
+                try
+                {
+                    var chars = await services[i].GetCharacteristicsAsync(BluetoothCacheMode.Uncached);
+                    if (chars.Status == GattCommunicationStatus.Success &&
+                        chars.Characteristics.Any(c => c.Uuid == QcyUuids.Command || c.Uuid == QcyUuids.Notification))
+                    {
+                        matchedIndex = i;
+                        break;
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        if (matchedIndex >= 0)
+        {
+            var selected = services[matchedIndex];
+            for (var i = 0; i < services.Count; i++)
+            {
+                if (i != matchedIndex)
+                {
+                    services[i].Dispose();
+                }
+            }
+
+            return selected;
+        }
+
+        foreach (var s in services)
+        {
+            s.Dispose();
+        }
+
+        diagnostics.Add($"{QcyAdvertisement.FormatAddress(address)}: Services found: [{string.Join(", ", foundUuids)}], but none matched A001");
+        return null;
     }
 
     internal static byte[] ReadBuffer(IBuffer buffer)
