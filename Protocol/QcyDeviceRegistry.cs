@@ -69,7 +69,7 @@ public static class QcyDeviceRegistry
                 SupportsAutoPowerOff = true,
                 SupportsGameMode = true,
                 SupportsSleepMode = true,
-                WearDetectionProtocol = QcyWearDetectionProtocol.Legacy,
+                WearDetectionProtocol = QcyWearDetectionProtocol.None,
                 SupportedAncScenes = [],
             },
         });
