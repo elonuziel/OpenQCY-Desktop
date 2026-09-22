@@ -92,6 +92,15 @@ try
     Console.WriteLine($"Connecting to the {target.Name} control channel…");
 
     await using var connection = await transport.ConnectAsync(target);
+
+    Console.WriteLine($"QCY characteristics found: {connection.Characteristics.Count}");
+    foreach (var characteristic in connection.Characteristics.OrderBy(item => item.Uuid))
+    {
+        Console.WriteLine(
+            $"  {characteristic.Uuid:D} · read {YesNo(characteristic.CanRead)} · " +
+            $"write {YesNo(characteristic.CanWrite)} · notify {YesNo(characteristic.CanNotify)}");
+    }
+
     await using var client = await QcyDeviceClient.CreateAsync(connection);
     client.ProtocolTrace += (_, line) => Console.WriteLine($"  {line}");
     await client.RefreshAsync();
@@ -106,13 +115,6 @@ try
     Console.WriteLine($"Game mode: {BooleanText(state.GameModeEnabled)}");
     Console.WriteLine($"LDAC: {BooleanText(state.LdacEnabled)} · multipoint: {BooleanText(state.MultipointEnabled)}");
     Console.WriteLine($"Equalizer: preset {state.EqualizerPreset?.ToString() ?? "not reported"} · {state.EqualizerGains.Count} bands");
-    Console.WriteLine($"QCY characteristics found: {connection.Characteristics.Count}");
-    foreach (var characteristic in connection.Characteristics.OrderBy(item => item.Uuid))
-    {
-        Console.WriteLine(
-            $"  {characteristic.Uuid:D} · read {YesNo(characteristic.CanRead)} · " +
-            $"write {YesNo(characteristic.CanWrite)} · notify {YesNo(characteristic.CanNotify)}");
-    }
 
     if (willDisableWearDetection)
     {

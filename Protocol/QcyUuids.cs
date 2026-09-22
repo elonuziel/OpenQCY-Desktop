@@ -6,6 +6,8 @@ public static class QcyUuids
     public static readonly Guid SecondaryService = Guid.Parse("0000a002-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Command = Guid.Parse("00001001-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Notification = Guid.Parse("00001002-0000-1000-8000-00805f9b34fb");
+    public static readonly Guid SecondaryCommand = Guid.Parse("00002001-0000-1000-8000-00805f9b34fb");
+    public static readonly Guid SecondaryNotification = Guid.Parse("00002002-0000-1000-8000-00805f9b34fb");
     public static readonly Guid FirmwareVersion = Guid.Parse("00000007-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Battery = Guid.Parse("00000008-0000-1000-8000-00805f9b34fb");
     public static readonly Guid Equalizer = Guid.Parse("0000000b-0000-1000-8000-00805f9b34fb");

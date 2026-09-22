@@ -419,7 +419,11 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                 {
                     var chars = await services[i].GetCharacteristicsAsync(BluetoothCacheMode.Uncached);
                     if (chars.Status == GattCommunicationStatus.Success &&
-                        chars.Characteristics.Any(c => c.Uuid == QcyUuids.Command || c.Uuid == QcyUuids.Notification))
+                        chars.Characteristics.Any(c =>
+                            c.Uuid == QcyUuids.Command ||
+                            c.Uuid == QcyUuids.Notification ||
+                            c.Uuid == QcyUuids.SecondaryCommand ||
+                            c.Uuid == QcyUuids.SecondaryNotification))
                     {
                         matchedIndex = i;
                         break;

@@ -12,6 +12,8 @@ public sealed class QcyDeviceClient : IAsyncDisposable
     private readonly SemaphoreSlim _commandLock = new(1, 1);
     private readonly object _stateLock = new();
     private readonly Dictionary<byte, TaskCompletionSource<byte[]>> _pendingResponses = [];
+    private readonly Guid _commandUuid;
+    private readonly Guid _notificationUuid;
     private bool _disposed;
 
     private QcyDeviceClient(IBluetoothDeviceConnection connection)
@@ -24,6 +26,9 @@ public sealed class QcyDeviceClient : IAsyncDisposable
             DeviceName = model?.DisplayName ?? connection.Name,
             Model = model,
         };
+
+        _commandUuid = ResolveCommandUuid(connection);
+        _notificationUuid = ResolveNotificationUuid(connection);
 
         _connection.ValueChanged += Connection_ValueChanged;
         _connection.Disconnected += Connection_Disconnected;
@@ -246,9 +251,9 @@ public sealed class QcyDeviceClient : IAsyncDisposable
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        RequireCharacteristic(QcyUuids.Command, canWrite: true);
-        RequireCharacteristic(QcyUuids.Notification, canNotify: true);
-        await _connection.SubscribeAsync(QcyUuids.Notification, cancellationToken);
+        RequireCharacteristic(_commandUuid, canWrite: true);
+        RequireCharacteristic(_notificationUuid, canNotify: true);
+        await _connection.SubscribeAsync(_notificationUuid, cancellationToken);
         if (_connection.Characteristics.Any(info => info.Uuid == QcyUuids.Battery && info.CanNotify))
         {
             await _connection.SubscribeAsync(QcyUuids.Battery, cancellationToken);
@@ -360,7 +365,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
             }
 
             Trace($"tx {Convert.ToHexString(packet)}");
-            await _connection.WriteAsync(QcyUuids.Command, packet, cancellationToken);
+            await _connection.WriteAsync(_commandUuid, packet, cancellationToken);
 
             try
             {
@@ -394,7 +399,7 @@ public sealed class QcyDeviceClient : IAsyncDisposable
             return;
         }
 
-        if (eventArgs.CharacteristicUuid != QcyUuids.Notification)
+        if (eventArgs.CharacteristicUuid != _notificationUuid)
         {
             return;
         }
@@ -509,6 +514,58 @@ public sealed class QcyDeviceClient : IAsyncDisposable
                 UpdateState(state => state with { KeyFunctions = QcyCommands.ParseKeyFunctions(parameters) });
                 break;
         }
+    }
+
+    private static Guid ResolveCommandUuid(IBluetoothDeviceConnection connection)
+    {
+        if (connection.Characteristics.Any(c => c.Uuid == QcyUuids.Command && c.CanWrite))
+        {
+            return QcyUuids.Command;
+        }
+
+        if (connection.Characteristics.Any(c => c.Uuid == QcyUuids.SecondaryCommand && c.CanWrite))
+        {
+            return QcyUuids.SecondaryCommand;
+        }
+
+        var candidate = connection.Characteristics.FirstOrDefault(c =>
+            c.CanWrite &&
+            (c.Uuid.ToString().StartsWith("00001001", StringComparison.OrdinalIgnoreCase) ||
+             c.Uuid.ToString().StartsWith("00002001", StringComparison.OrdinalIgnoreCase) ||
+             c.Uuid.ToString().StartsWith("0000b001", StringComparison.OrdinalIgnoreCase)));
+        if (candidate is not null)
+        {
+            return candidate.Uuid;
+        }
+
+        var fallback = connection.Characteristics.FirstOrDefault(c => c.CanWrite);
+        return fallback?.Uuid ?? QcyUuids.Command;
+    }
+
+    private static Guid ResolveNotificationUuid(IBluetoothDeviceConnection connection)
+    {
+        if (connection.Characteristics.Any(c => c.Uuid == QcyUuids.Notification && c.CanNotify))
+        {
+            return QcyUuids.Notification;
+        }
+
+        if (connection.Characteristics.Any(c => c.Uuid == QcyUuids.SecondaryNotification && c.CanNotify))
+        {
+            return QcyUuids.SecondaryNotification;
+        }
+
+        var candidate = connection.Characteristics.FirstOrDefault(c =>
+            c.CanNotify &&
+            (c.Uuid.ToString().StartsWith("00001002", StringComparison.OrdinalIgnoreCase) ||
+             c.Uuid.ToString().StartsWith("00002002", StringComparison.OrdinalIgnoreCase) ||
+             c.Uuid.ToString().StartsWith("0000b002", StringComparison.OrdinalIgnoreCase)));
+        if (candidate is not null)
+        {
+            return candidate.Uuid;
+        }
+
+        var fallback = connection.Characteristics.FirstOrDefault(c => c.CanNotify);
+        return fallback?.Uuid ?? QcyUuids.Notification;
     }
 
     private void RequireCharacteristic(Guid uuid, bool canWrite = false, bool canNotify = false)
