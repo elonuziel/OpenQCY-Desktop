@@ -166,50 +166,63 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
 
         void OnReceived(BluetoothLEAdvertisementWatcher _, BluetoothLEAdvertisementReceivedEventArgs eventArgs)
         {
-            foreach (var manufacturerData in eventArgs.Advertisement.ManufacturerData)
+            var advertisementData = eventArgs.Advertisement;
+            QcyAdvertisement? parsedAdv = null;
+            foreach (var mfr in advertisementData.ManufacturerData)
             {
-                if (manufacturerData.CompanyId != QcyUuids.CompanyId)
+                if (mfr.CompanyId == QcyUuids.CompanyId)
                 {
-                    continue;
+                    parsedAdv = QcyAdvertisement.Parse(ReadBuffer(mfr.Data));
+                    break;
                 }
-
-                var advertisement = QcyAdvertisement.Parse(ReadBuffer(manufacturerData.Data));
-                if (advertisement is null)
-                {
-                    continue;
-                }
-
-                var name = eventArgs.Advertisement.LocalName;
-                if (string.IsNullOrWhiteSpace(name))
-                {
-                    var model = QcyDeviceRegistry.FindByVendorId(advertisement.VendorId);
-                    name = model?.DisplayName ?? $"QCY device ({advertisement.VendorId})";
-                }
-
-                var info = new BluetoothDeviceInfo(
-                    QcyAdvertisement.FormatAddress(eventArgs.BluetoothAddress),
-                    name,
-                    eventArgs.BluetoothAddress,
-                    advertisement.ControlAddress,
-                    advertisement.OtherAddress,
-                    advertisement.VendorId,
-                    eventArgs.RawSignalStrengthInDBm,
-                    advertisement.LeftBattery,
-                    advertisement.RightBattery,
-                    advertisement.CaseBattery,
-                    advertisement.LeftCharging,
-                    advertisement.RightCharging,
-                    advertisement.CaseCharging,
-                    eventArgs.Timestamp);
-
-                devices.AddOrUpdate(eventArgs.BluetoothAddress, info, (_, previous) =>
-                    info with
-                    {
-                        Name = string.IsNullOrWhiteSpace(info.Name) ? previous.Name : info.Name,
-                        ControlAddress = info.ControlAddress ?? previous.ControlAddress,
-                        OtherAddress = info.OtherAddress ?? previous.OtherAddress,
-                    });
             }
+
+            var name = advertisementData.LocalName;
+            var isRecognizedName = !string.IsNullOrWhiteSpace(name) && QcyDeviceRegistry.LooksLikeSupported(name);
+            var isRecognizedService = advertisementData.ServiceUuids.Any(uuid =>
+                uuid == QcyUuids.MainService ||
+                uuid == QcyUuids.SecondaryService ||
+                uuid.ToString().StartsWith("0000a001", StringComparison.OrdinalIgnoreCase) ||
+                uuid.ToString().StartsWith("0000a002", StringComparison.OrdinalIgnoreCase));
+
+            if (parsedAdv is null && !isRecognizedName && !isRecognizedService)
+            {
+                return;
+            }
+
+            var matchedModel = QcyDeviceRegistry.FindByBluetoothName(name);
+            var vendorId = parsedAdv?.VendorId ?? matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.T13AncVendorId;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                name = matchedModel?.DisplayName ?? $"QCY device ({vendorId})";
+            }
+
+            var info = new BluetoothDeviceInfo(
+                QcyAdvertisement.FormatAddress(eventArgs.BluetoothAddress),
+                name,
+                eventArgs.BluetoothAddress,
+                parsedAdv?.ControlAddress,
+                parsedAdv?.OtherAddress,
+                vendorId,
+                eventArgs.RawSignalStrengthInDBm,
+                parsedAdv?.LeftBattery ?? 0,
+                parsedAdv?.RightBattery ?? 0,
+                parsedAdv?.CaseBattery ?? 0,
+                parsedAdv?.LeftCharging ?? false,
+                parsedAdv?.RightCharging ?? false,
+                parsedAdv?.CaseCharging ?? false,
+                eventArgs.Timestamp);
+
+            devices.AddOrUpdate(eventArgs.BluetoothAddress, info, (_, previous) =>
+                info with
+                {
+                    Name = string.IsNullOrWhiteSpace(info.Name) ? previous.Name : info.Name,
+                    ControlAddress = info.ControlAddress ?? previous.ControlAddress,
+                    OtherAddress = info.OtherAddress ?? previous.OtherAddress,
+                    LeftBattery = info.LeftBattery > 0 ? info.LeftBattery : previous.LeftBattery,
+                    RightBattery = info.RightBattery > 0 ? info.RightBattery : previous.RightBattery,
+                    CaseBattery = info.CaseBattery > 0 ? info.CaseBattery : previous.CaseBattery,
+                });
         }
 
         watcher.Received += OnReceived;

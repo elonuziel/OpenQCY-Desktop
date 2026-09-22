@@ -75,8 +75,19 @@ try
     var devices = await transport.ScanForQcyDevicesAsync(TimeSpan.FromSeconds(12));
     if (devices.Count == 0)
     {
-        Console.Error.WriteLine("No QCY BLE advertisement (0x521C) was found.");
-        return 2;
+        Console.WriteLine("No live BLE advertisement found; checking Windows paired QCY devices…");
+        var paired = await transport.FindPairedQcyDevicesAsync();
+        if (paired.Count > 0)
+        {
+            devices = paired;
+            Console.WriteLine($"Found {paired.Count} paired QCY device(s) in Windows cache.");
+        }
+        else
+        {
+            Console.Error.WriteLine("No QCY BLE advertisement (0x521C) or paired QCY device was found.");
+            Console.Error.WriteLine("Tip: Close the earbud case lid, wait 2 seconds, open the lid again near the PC, and retry.");
+            return 2;
+        }
     }
 
     foreach (var device in devices)
