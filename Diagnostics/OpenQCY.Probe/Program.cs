@@ -206,10 +206,10 @@ try
         Console.WriteLine("Listen complete.");
         return 0;
     }
-
-    await using var client = await QcyDeviceClient.CreateAsync(connection);
-    client.ProtocolTrace += (_, line) => Console.WriteLine($"  {line}");
-    await client.RefreshAsync();
+    Console.WriteLine("Connecting to QCY client and querying device state…");
+    await using var client = await QcyDeviceClient.CreateAsync(
+        connection,
+        line => Console.WriteLine($"  {line}"));
 
     var state = client.State;
     Console.WriteLine($"Connected: {state.DeviceName} (Model: {state.Model?.DisplayName ?? "Generic / Fallback"})");

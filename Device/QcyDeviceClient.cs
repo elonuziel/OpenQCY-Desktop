@@ -6,7 +6,7 @@ namespace OpenQCY_Desktop.Device;
 
 public sealed class QcyDeviceClient : IAsyncDisposable
 {
-    private static readonly TimeSpan ResponseTimeout = TimeSpan.FromSeconds(2.5);
+    private static readonly TimeSpan ResponseTimeout = TimeSpan.FromSeconds(1.2);
 
     private readonly IBluetoothDeviceConnection _connection;
     private readonly SemaphoreSlim _commandLock = new(1, 1);
@@ -41,10 +41,16 @@ public sealed class QcyDeviceClient : IAsyncDisposable
 
     public static async Task<QcyDeviceClient> CreateAsync(
         IBluetoothDeviceConnection connection,
+        Action<string>? trace = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
         var client = new QcyDeviceClient(connection);
+        if (trace is not null)
+        {
+            client.ProtocolTrace += (_, line) => trace(line);
+        }
+
         try
         {
             await client.InitializeAsync(cancellationToken);
