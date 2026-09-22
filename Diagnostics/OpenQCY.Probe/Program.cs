@@ -180,6 +180,33 @@ try
             $"write {YesNo(characteristic.CanWrite)} · notify {YesNo(characteristic.CanNotify)}");
     }
 
+    var willListen = args.Contains("--listen", StringComparer.OrdinalIgnoreCase);
+
+    if (willListen)
+    {
+        Console.WriteLine("Listen mode: subscribing to all notify characteristics for 30s (no commands sent).");
+        Console.WriteLine("Press a button on the earbuds to capture protocol packets.");
+
+        // Subscribe to every notify characteristic
+        var notifyChars = connection.Characteristics.Where(c => c.CanNotify).ToArray();
+        foreach (var chr in notifyChars)
+        {
+            await connection.SubscribeAsync(chr.Uuid);
+            Console.WriteLine($"  Subscribed to {chr.Uuid:D}");
+        }
+
+        connection.ValueChanged += (_, e) =>
+        {
+            var hex = string.Join(" ", e.Value.Select(b => b.ToString("X2")));
+            Console.WriteLine($"  [{DateTime.Now:HH:mm:ss.fff}] {e.CharacteristicUuid:D} → {hex}");
+        };
+
+        Console.WriteLine("Listening…");
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        Console.WriteLine("Listen complete.");
+        return 0;
+    }
+
     await using var client = await QcyDeviceClient.CreateAsync(connection);
     client.ProtocolTrace += (_, line) => Console.WriteLine($"  {line}");
     await client.RefreshAsync();
