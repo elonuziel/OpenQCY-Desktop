@@ -331,9 +331,9 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
                 QcyDeviceCache.Instance.Record(
                     device.Name,
                     device.VendorId,
-                    address,
-                    device.OtherAddress ?? (device.BluetoothAddress != address ? device.BluetoothAddress : null),
-                    device.BluetoothAddress);
+                    controlAddress: address,
+                    classicAddress: device.BluetoothAddress != address ? device.BluetoothAddress : null,
+                    advertisingAddress: null);
 
                 return connection;
             }
@@ -537,6 +537,7 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
         var name = string.IsNullOrWhiteSpace(bluetoothDevice.Name)
             ? fallbackName ?? matchedModel?.DisplayName ?? "QCY Earbuds"
             : bluetoothDevice.Name;
+        var vendorId = matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.N70BlackVendorId;
         var cachedControl = QcyDeviceCache.Instance.FindControlAddress(bluetoothDevice.BluetoothAddress, name);
         var controlAddress = cachedControl ?? bluetoothDevice.BluetoothAddress;
 

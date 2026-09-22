@@ -74,7 +74,7 @@ public sealed class QcyDeviceCache
         ulong? classicAddress = null,
         ulong? advertisingAddress = null)
     {
-        if (controlAddress is null or 0 && classicAddress is null or 0 && advertisingAddress is null or 0)
+        if ((controlAddress is null or 0) && (classicAddress is null or 0) && (advertisingAddress is null or 0))
         {
             return;
         }
