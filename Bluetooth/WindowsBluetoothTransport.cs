@@ -97,6 +97,48 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
             }
         }
 
+        var classicSelector = BluetoothDevice.GetDeviceSelectorFromPairingState(true);
+        var pairedClassicDevices = await DeviceInformation.FindAllAsync(classicSelector);
+        foreach (var pairedClassic in pairedClassicDevices.Where(device => QcyDeviceRegistry.LooksLikeSupported(device.Name)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var classicDevice = await BluetoothDevice.FromIdAsync(pairedClassic.Id);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (classicDevice is null)
+                {
+                    continue;
+                }
+
+                var matchedModel = QcyDeviceRegistry.FindByBluetoothName(classicDevice.Name)
+                    ?? QcyDeviceRegistry.FindByBluetoothName(pairedClassic.Name);
+                var name = string.IsNullOrWhiteSpace(classicDevice.Name)
+                    ? pairedClassic.Name ?? matchedModel?.DisplayName ?? "QCY Earbuds"
+                    : classicDevice.Name;
+                var vendorId = matchedModel?.VendorIds.FirstOrDefault() ?? QcyUuids.N70BlackVendorId;
+
+                devices.Add(new BluetoothDeviceInfo(
+                    pairedClassic.Id,
+                    name,
+                    classicDevice.BluetoothAddress,
+                    null,
+                    null,
+                    vendorId,
+                    short.MinValue,
+                    0,
+                    0,
+                    0,
+                    false,
+                    false,
+                    false,
+                    DateTimeOffset.UtcNow));
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
+
         return devices
             .DistinctBy(device => device.BluetoothAddress)
             .ToArray();
@@ -190,16 +232,25 @@ public sealed class WindowsBluetoothTransport : IBluetoothTransport
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        var candidates = new ulong?[]
-            {
-                device.ControlAddress,
-                device.BluetoothAddress,
-                device.OtherAddress,
-            }
-            .Where(address => address.HasValue)
-            .Select(address => address!.Value)
-            .Distinct()
-            .ToArray();
+        var candidateAddresses = new List<ulong>();
+        if (device.ControlAddress.HasValue)
+        {
+            candidateAddresses.Add(device.ControlAddress.Value);
+        }
+
+        if (device.BluetoothAddress != 0)
+        {
+            candidateAddresses.Add(device.BluetoothAddress);
+            candidateAddresses.Add(device.BluetoothAddress ^ 1);
+            candidateAddresses.Add(device.BluetoothAddress + 1);
+        }
+
+        if (device.OtherAddress.HasValue)
+        {
+            candidateAddresses.Add(device.OtherAddress.Value);
+        }
+
+        var candidates = candidateAddresses.Distinct().ToArray();
 
         var diagnostics = new List<string>();
         foreach (var address in candidates)

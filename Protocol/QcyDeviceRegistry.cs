@@ -59,7 +59,7 @@ public static class QcyDeviceRegistry
             DisplayName = "QCY T13 ANC",
             ModelCode = "BH22T13A",
             VendorIds = [18290],
-            BluetoothNamePatterns = ["T13 ANC", "QCY-T13 ANC"],
+            BluetoothNamePatterns = ["T13 ANC", "QCY-T13 ANC", "T13ANC", "QCY-T13ANC"],
             Capabilities = new QcyDeviceCapabilities
             {
                 SupportsLdac = false,
@@ -200,9 +200,7 @@ public static class QcyDeviceRegistry
         }
 
         return ModelsById.Values.Any(model => model.MatchesBluetoothName(name)) ||
-               (name.Contains("QCY", StringComparison.OrdinalIgnoreCase) &&
-                (name.Contains("Buds", StringComparison.OrdinalIgnoreCase) ||
-                 name.Contains("MeloBuds", StringComparison.OrdinalIgnoreCase)));
+               name.Contains("QCY", StringComparison.OrdinalIgnoreCase);
     }
 
     public static QcyDeviceDefinition CreateFallback(ushort vendorId, string? fallbackName = null)

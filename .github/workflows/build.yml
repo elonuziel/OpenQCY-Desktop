@@ -48,11 +48,11 @@ jobs:
       - name: Build desktop app
         run: dotnet build OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -p:RuntimeIdentifier=win-x64 -p:TargetPlatformMinVersion=${{ matrix.min-version }} --no-restore
 
-      - name: Build diagnostic probe
-        run: dotnet build Diagnostics/OpenQCY.Probe/OpenQCY.Probe.csproj -c Release
-
       - name: Publish portable build
         run: dotnet publish OpenQCY.Desktop.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -p:TargetPlatformMinVersion=${{ matrix.min-version }} --no-restore -o artifacts/publish
+
+      - name: Publish diagnostic probe
+        run: dotnet publish Diagnostics/OpenQCY.Probe/OpenQCY.Probe.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true -p:TargetPlatformMinVersion=${{ matrix.min-version }} -o artifacts/publish
 
       - name: Install pinned Inno Setup
         shell: pwsh

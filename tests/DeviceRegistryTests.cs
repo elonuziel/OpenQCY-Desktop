@@ -47,6 +47,8 @@ public sealed class DeviceRegistryTests
 
     [TestMethod]
     [DataRow("QCY-T13 ANC", "t13-anc")]
+    [DataRow("QCY-T13ANC", "t13-anc")]
+    [DataRow("T13ANC", "t13-anc")]
     [DataRow("QCY T13 ANC2", "t13-anc-2")]
     [DataRow("QCY Buds ANC", "t15-anc")]
     [DataRow("QCY HT15", "t15-anc")]
@@ -57,6 +59,16 @@ public sealed class DeviceRegistryTests
         var model = QcyDeviceRegistry.FindByBluetoothName(bluetoothName);
         Assert.IsNotNull(model, $"Model should be found for '{bluetoothName}'");
         Assert.AreEqual(expectedId, model.Id);
+    }
+
+    [TestMethod]
+    public void LooksLikeSupportedRecognizesAnyQcyDeviceName()
+    {
+        Assert.IsTrue(QcyDeviceRegistry.LooksLikeSupported("QCY-T13 ANC"));
+        Assert.IsTrue(QcyDeviceRegistry.LooksLikeSupported("QCY T13"));
+        Assert.IsTrue(QcyDeviceRegistry.LooksLikeSupported("Headphones QCY-T13 ANC"));
+        Assert.IsFalse(QcyDeviceRegistry.LooksLikeSupported("Sony WH-1000XM4"));
+        Assert.IsFalse(QcyDeviceRegistry.LooksLikeSupported(null));
     }
 
     [TestMethod]

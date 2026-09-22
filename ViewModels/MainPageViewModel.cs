@@ -313,8 +313,12 @@ public partial class MainPageViewModel : ObservableObject
             ConnectionStatus = "Looking for the saved control channel";
 
             var knownDevices = (await _bluetoothTransport.FindPairedQcyDevicesAsync())
-                .Where(device => QcyDeviceRegistry.IsSupported(device.VendorId))
                 .ToList();
+            if (knownDevices.Count > 0 && (string.IsNullOrWhiteSpace(DeviceName) || DeviceName == "QCY Earbuds"))
+            {
+                DeviceName = knownDevices[0].Name;
+            }
+
             var rememberedDevice = CreateRememberedDevice(desiredProfile);
             if (rememberedDevice is not null)
             {
@@ -331,6 +335,10 @@ public partial class MainPageViewModel : ObservableObject
                     .Where(device => QcyDeviceRegistry.IsSupported(device.VendorId))
                     .ToArray();
                 target = await ConnectFirstAvailableAsync(advertisedSupported);
+                if (target is null && advertisedDevices.Count > 0)
+                {
+                    target = await ConnectFirstAvailableAsync(advertisedDevices);
+                }
                 if (target is null)
                 {
                     throw new InvalidOperationException(
