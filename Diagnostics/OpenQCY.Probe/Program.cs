@@ -59,7 +59,6 @@ if (devices.Count == 0)
 
 foreach (var device in devices)
 {
-    var recognized = QcyDeviceRegistry.Find(device.VendorId);
     var recognized = QcyDeviceRegistry.FindByVendorId(device.VendorId);
     var label = recognized is not null ? $"[{recognized.DisplayName}] " : "";
     Console.WriteLine(
